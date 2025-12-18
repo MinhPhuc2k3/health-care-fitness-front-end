@@ -1,5 +1,15 @@
 import { useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+} from 'recharts'
 import './App.css'
 
 type Role = {
@@ -47,6 +57,30 @@ type ExerciseBulkImportResponse = {
   successCount: number
   failureCount: number
   errors: string[]
+}
+
+type UserMonthlyStats = {
+  month: string
+  newUsers: number
+  activeUsers: number
+}
+
+type ExerciseMonthlyRanking = {
+  month: string
+  exerciseId: number
+  name: string
+  image_url: string
+  totalSessions: number
+  rank: number
+}
+
+type RecipeMonthlyRanking = {
+  month: string
+  recipeId: number
+  name: string
+  image_url: string
+  totalTimes: number
+  rank: number
 }
 
 const API_BASE = 'http://localhost:8000'
@@ -108,6 +142,14 @@ function App() {
   const [editError, setEditError] = useState<string | null>(null)
 
   const [deleteLoadingId, setDeleteLoadingId] = useState<number | null>(null)
+
+  const [userMonthlyStats, setUserMonthlyStats] = useState<UserMonthlyStats[]>([])
+  const [exerciseRanking, setExerciseRanking] = useState<ExerciseMonthlyRanking[]>([])
+  const [recipeRanking, setRecipeRanking] = useState<RecipeMonthlyRanking[]>([])
+  const [dashboardLoading, setDashboardLoading] = useState(false)
+  const [dashboardError, setDashboardError] = useState<string | null>(null)
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1)
 
   const isLoggedIn = !!user?.token
 
@@ -189,6 +231,72 @@ function App() {
     }
   }
 
+  const fetchDashboardData = async () => {
+    if (!isLoggedIn || !user?.token) return
+
+    setDashboardLoading(true)
+    setDashboardError(null)
+
+    try {
+      const [userStatsRes, exerciseRankRes, recipeRankRes] = await Promise.all([
+        fetch(`${API_BASE}/api/dashboard/users/monthly`, {
+          headers: {
+            Authorization: `Bearer ${user.token}`,
+          },
+        }),
+        fetch(
+          `${API_BASE}/api/dashboard/exercises/monthly?year=${selectedYear}&month=${selectedMonth}`,
+          {
+            headers: {
+              Authorization: `Bearer ${user.token}`,
+            },
+          },
+        ),
+        fetch(
+          `${API_BASE}/api/dashboard/recipes/monthly?year=${selectedYear}&month=${selectedMonth}`,
+          {
+            headers: {
+              Authorization: `Bearer ${user.token}`,
+            },
+          },
+        ),
+      ])
+
+      if (!userStatsRes.ok) {
+        throw new Error(`Failed to fetch user stats: ${userStatsRes.status}`)
+      }
+      if (!exerciseRankRes.ok) {
+        throw new Error(`Failed to fetch exercise ranking: ${exerciseRankRes.status}`)
+      }
+      if (!recipeRankRes.ok) {
+        throw new Error(`Failed to fetch recipe ranking: ${recipeRankRes.status}`)
+      }
+
+      const userStats: UserMonthlyStats[] = await userStatsRes.json()
+      const exerciseRankRaw: any[] = await exerciseRankRes.json()
+      const recipeRankRaw: any[] = await recipeRankRes.json()
+
+      // Map url -> image_url nếu backend trả về url
+      const exerciseRank: ExerciseMonthlyRanking[] = exerciseRankRaw.map((item) => ({
+        ...item,
+        image_url: item.image_url || item.url || '',
+      }))
+      const recipeRank: RecipeMonthlyRanking[] = recipeRankRaw.map((item) => ({
+        ...item,
+        image_url: item.image_url || item.url || '',
+      }))
+
+      setUserMonthlyStats(userStats)
+      setExerciseRanking(exerciseRank)
+      setRecipeRanking(recipeRank)
+    } catch (err: any) {
+      console.error(err)
+      setDashboardError(err.message ?? 'Không tải được dữ liệu dashboard')
+    } finally {
+      setDashboardLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (isLoggedIn) {
       // load muscle groups for filters
@@ -225,6 +333,13 @@ function App() {
     pageSize,
     exerciseSubTab,
   ])
+
+  useEffect(() => {
+    if (isLoggedIn && activeTab === 'overview') {
+      fetchDashboardData()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn, activeTab, selectedYear, selectedMonth])
 
   const handleLogout = () => {
     setUser(null)
@@ -643,10 +758,212 @@ function App() {
             </div>
 
             {activeTab === 'overview' && (
-              <section className="card">
-                <h2>Tổng quan</h2>
-                <p>Đây là khu vực bạn có thể thêm các thống kê / dashboard sau này.</p>
-              </section>
+              <div>
+                <section className="card">
+                  <div className="card-header">
+                    <h2>Dashboard Analytics</h2>
+                    <div className="card-header-actions">
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => setSelectedYear(Number(e.target.value))}
+                        style={{ marginRight: '0.5rem' }}
+                      >
+                        {Array.from({ length: 5 }, (_, i) => {
+                          const year = new Date().getFullYear() - i
+                          return (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          )
+                        })}
+                      </select>
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                      >
+                        {Array.from({ length: 12 }, (_, i) => (
+                          <option key={i + 1} value={i + 1}>
+                            Tháng {i + 1}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        className="btn outline"
+                        onClick={fetchDashboardData}
+                        disabled={dashboardLoading}
+                      >
+                        {dashboardLoading ? 'Đang tải...' : 'Tải lại'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {dashboardError && (
+                    <p className="error-text">{dashboardError}</p>
+                  )}
+
+                  {dashboardLoading && !userMonthlyStats.length && (
+                    <p>Đang tải dữ liệu...</p>
+                  )}
+
+                  {!dashboardLoading && userMonthlyStats.length > 0 && (
+                    <>
+                      <div style={{ marginBottom: '2rem' }}>
+                        <h3>Thống kê người dùng mới theo tháng</h3>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={userMonthlyStats}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis
+                              dataKey="month"
+                              tickFormatter={(value: string) => {
+                                const date = new Date(value)
+                                return `${date.getFullYear()}-${String(
+                                  date.getMonth() + 1,
+                                ).padStart(2, '0')}`
+                              }}
+                            />
+                            <YAxis />
+                            <Tooltip
+                              labelFormatter={(value: string) => {
+                                const date = new Date(value)
+                                return `${date.getFullYear()}-${String(
+                                  date.getMonth() + 1,
+                                ).padStart(2, '0')}`
+                              }}
+                            />
+                            <Legend />
+                            <Bar
+                              dataKey="newUsers"
+                              fill="#22c55e"
+                              name="User mới"
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      <div style={{ marginBottom: '2rem' }}>
+                        <h3>Xếp hạng bài tập tháng {selectedMonth}/{selectedYear}</h3>
+                        {exerciseRanking.length > 0 ? (
+                          <>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <BarChart
+                                data={exerciseRanking.slice(0, 10).map((item) => ({
+                                  ...item,
+                                  displayName: item.name || `Bài tập #${item.exerciseId}`,
+                                }))}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="displayName" />
+                                <YAxis />
+                                <Tooltip />
+                                <Legend />
+                                <Bar
+                                  dataKey="totalSessions"
+                                  fill="#3b82f6"
+                                  name="Số lần tập"
+                                />
+                              </BarChart>
+                            </ResponsiveContainer>
+                            <div className="table-wrapper" style={{ marginTop: '1rem' }}>
+                              <table className="table">
+                                <thead>
+                                  <tr>
+                                    <th>Rank</th>
+                                    <th>Tên bài tập</th>
+                                    <th>Ảnh</th>
+                                    <th>Số lần tập</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {exerciseRanking.slice(0, 10).map((item) => (
+                                    <tr key={item.exerciseId}>
+                                      <td>{item.rank}</td>
+                                      <td>{item.name || `Bài tập #${item.exerciseId}`}</td>
+                                      <td>
+                                        {item.image_url && (
+                                          <img
+                                            src={item.image_url}
+                                            alt={item.name || `Exercise ${item.exerciseId}`}
+                                            className="exercise-image"
+                                            style={{ width: '48px', height: '48px' }}
+                                          />
+                                        )}
+                                      </td>
+                                      <td>{item.totalSessions}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        ) : (
+                          <p>Chưa có dữ liệu cho tháng này.</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <h3>Xếp hạng món ăn tháng {selectedMonth}/{selectedYear}</h3>
+                        {recipeRanking.length > 0 ? (
+                          <>
+                            <ResponsiveContainer width="100%" height={300}>
+                              <BarChart
+                                data={recipeRanking.slice(0, 10).map((item) => ({
+                                  ...item,
+                                  displayName: item.name || `Món ăn #${item.recipeId}`,
+                                }))}
+                              >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="displayName" />
+                                <YAxis />
+                                <Tooltip />
+                                <Legend />
+                                <Bar
+                                  dataKey="totalTimes"
+                                  fill="#f59e0b"
+                                  name="Số lần sử dụng"
+                                />
+                              </BarChart>
+                            </ResponsiveContainer>
+                            <div className="table-wrapper" style={{ marginTop: '1rem' }}>
+                              <table className="table">
+                                <thead>
+                                  <tr>
+                                    <th>Rank</th>
+                                    <th>Tên món ăn</th>
+                                    <th>Ảnh</th>
+                                    <th>Số lần sử dụng</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {recipeRanking.slice(0, 10).map((item) => (
+                                    <tr key={item.recipeId}>
+                                      <td>{item.rank}</td>
+                                      <td>{item.name || `Món ăn #${item.recipeId}`}</td>
+                                      <td>
+                                        {item.image_url && (
+                                          <img
+                                            src={item.image_url}
+                                            alt={item.name || `Recipe ${item.recipeId}`}
+                                            className="exercise-image"
+                                            style={{ width: '48px', height: '48px' }}
+                                          />
+                                        )}
+                                      </td>
+                                      <td>{item.totalTimes}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        ) : (
+                          <p>Chưa có dữ liệu cho tháng này.</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </section>
+              </div>
             )}
 
             {activeTab === 'exercises' && (
@@ -670,7 +987,7 @@ function App() {
                   </button>
       </div>
 
-                {exerciseSubTab === 'list' && (
+                {exerciseSubTab === 'list' && !editingExercise && (
                   <section className="card">
                     <div className="card-header">
                       <h2>Danh sách bài tập</h2>
@@ -947,7 +1264,9 @@ function App() {
                                 <tr>
                                   <th>Hàng</th>
                                   {Object.keys(excelRows[0] ?? {}).map((key) => (
-                                    <th key={key}>{key}</th>
+                                    <th key={key} data-column={key.toLowerCase()}>
+                                      {key}
+                                    </th>
                                   ))}
                                   <th>Ảnh upload</th>
                                 </tr>
@@ -962,7 +1281,7 @@ function App() {
                                     <tr key={rowIndex}>
                                       <td>{rowIndex}</td>
                                       {Object.keys(excelRows[0] ?? {}).map((key) => (
-                                        <td key={key}>
+                                        <td key={key} data-column={key.toLowerCase()}>
                                           {String(row[key] ?? '').toString()}
                                         </td>
                                       ))}
@@ -1057,9 +1376,21 @@ function App() {
                   </section>
                 )}
 
-                {editingExercise && (
+                {exerciseSubTab === 'list' && editingExercise && (
                   <section className="card edit-card">
-                    <h2>Chỉnh sửa bài tập #{editingExercise.id}</h2>
+                    <div className="card-header">
+                      <h2>Chỉnh sửa bài tập #{editingExercise.id}</h2>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          setEditingExercise(null)
+                          setEditError(null)
+                        }}
+                      >
+                        Quay lại
+                      </button>
+                    </div>
                     <form className="form" onSubmit={handleUpdateExercise}>
                       <div className="form-row">
                         <div className="form-group">
