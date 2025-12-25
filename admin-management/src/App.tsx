@@ -83,6 +83,67 @@ type RecipeMonthlyRanking = {
   rank: number
 }
 
+type Ingredient = {
+  id: number
+  name: string
+  description: string
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+  imageUrl?: string
+}
+
+type IngredientPage = {
+  content: Ingredient[]
+  page: {
+    size: number
+    number: number
+    totalElements: number
+    totalPages: number
+  }
+}
+
+type IngredientImportResponse = {
+  success: boolean
+  message: string
+  totalImported?: number
+  totalImages?: number
+  data?: Ingredient[]
+  errors?: string
+}
+
+type RecipeIngredient = {
+  ingredient: {
+    id: number
+    name?: string
+  }
+  quantity: number
+}
+
+type Recipe = {
+  id: number
+  name: string
+  description: string
+  calories: number
+  protein: number
+  carbs: number
+  fat: number
+  type: string
+  imageUrl?: string
+  recipeIngredients?: RecipeIngredient[]
+}
+
+type RecipePage = {
+  content: Recipe[]
+  page: {
+    size: number
+    number: number
+    totalElements: number
+    totalPages: number
+  }
+}
+
 const API_BASE = 'http://localhost:8000'
 
 function App() {
@@ -98,10 +159,11 @@ function App() {
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(10)
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'exercises'>(
+  const [activeTab, setActiveTab] = useState<'overview' | 'exercises' | 'foods'>(
     'exercises',
   )
   const [exerciseSubTab, setExerciseSubTab] = useState<'list' | 'import'>('list')
+  const [foodSubTab, setFoodSubTab] = useState<'ingredients' | 'recipes'>('ingredients')
 
   const [exerciseName, setExerciseName] = useState('')
 
@@ -142,6 +204,87 @@ function App() {
   const [editError, setEditError] = useState<string | null>(null)
 
   const [deleteLoadingId, setDeleteLoadingId] = useState<number | null>(null)
+
+  // Ingredient states
+  const [ingredientsPage, setIngredientsPage] = useState<IngredientPage | null>(null)
+  const [ingredientError, setIngredientError] = useState<string | null>(null)
+  const [loadingIngredients, setLoadingIngredients] = useState(false)
+  const [ingredientPage, setIngredientPage] = useState(0)
+  const [ingredientPageSize, setIngredientPageSize] = useState(10)
+  const [ingredientSort, setIngredientSort] = useState('name,asc')
+  const [ingredientName, setIngredientName] = useState('')
+
+  const [editingIngredient, setEditingIngredient] = useState<Ingredient | null>(null)
+  const [editIngredientName, setEditIngredientName] = useState('')
+  const [editIngredientDescription, setEditIngredientDescription] = useState('')
+  const [editIngredientCalories, setEditIngredientCalories] = useState<string>('')
+  const [editIngredientProtein, setEditIngredientProtein] = useState<string>('')
+  const [editIngredientCarbs, setEditIngredientCarbs] = useState<string>('')
+  const [editIngredientFat, setEditIngredientFat] = useState<string>('')
+  const [editIngredientImageFile, setEditIngredientImageFile] = useState<File | null>(null)
+  const [editIngredientLoading, setEditIngredientLoading] = useState(false)
+  const [editIngredientError, setEditIngredientError] = useState<string | null>(null)
+
+  const [creatingIngredient, setCreatingIngredient] = useState(false)
+  const [createIngredientName, setCreateIngredientName] = useState('')
+  const [createIngredientDescription, setCreateIngredientDescription] = useState('')
+  const [createIngredientCalories, setCreateIngredientCalories] = useState<string>('')
+  const [createIngredientProtein, setCreateIngredientProtein] = useState<string>('')
+  const [createIngredientCarbs, setCreateIngredientCarbs] = useState<string>('')
+  const [createIngredientFat, setCreateIngredientFat] = useState<string>('')
+  const [createIngredientImageFile, setCreateIngredientImageFile] = useState<File | null>(null)
+  const [createIngredientLoading, setCreateIngredientLoading] = useState(false)
+  const [createIngredientError, setCreateIngredientError] = useState<string | null>(null)
+
+  const [deleteIngredientLoadingId, setDeleteIngredientLoadingId] = useState<number | null>(null)
+
+  const [ingredientExcelFile, setIngredientExcelFile] = useState<File | null>(null)
+  const [ingredientImageFiles, setIngredientImageFiles] = useState<File[]>([])
+  const [ingredientImportLoading, setIngredientImportLoading] = useState(false)
+  const [ingredientImportError, setIngredientImportError] = useState<string | null>(null)
+  const [ingredientImportResult, setIngredientImportResult] =
+    useState<IngredientImportResponse | null>(null)
+
+  // Recipe states
+  const [recipesPage, setRecipesPage] = useState<RecipePage | null>(null)
+  const [recipeError, setRecipeError] = useState<string | null>(null)
+  const [loadingRecipes, setLoadingRecipes] = useState(false)
+  const [recipePage, setRecipePage] = useState(0)
+  const [recipePageSize, setRecipePageSize] = useState(10)
+  const [recipeName, setRecipeName] = useState('')
+
+  const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null)
+  const [editRecipeName, setEditRecipeName] = useState('')
+  const [editRecipeDescription, setEditRecipeDescription] = useState('')
+  const [editRecipeCalories, setEditRecipeCalories] = useState<string>('')
+  const [editRecipeProtein, setEditRecipeProtein] = useState<string>('')
+  const [editRecipeCarbs, setEditRecipeCarbs] = useState<string>('')
+  const [editRecipeFat, setEditRecipeFat] = useState<string>('')
+  const [editRecipeType, setEditRecipeType] = useState('')
+  const [editRecipeIngredients, setEditRecipeIngredients] = useState<
+    { ingredientId: number; quantity: string }[]
+  >([])
+  const [editRecipeImageFile, setEditRecipeImageFile] = useState<File | null>(null)
+  const [editRecipeLoading, setEditRecipeLoading] = useState(false)
+  const [editRecipeError, setEditRecipeError] = useState<string | null>(null)
+
+  const [creatingRecipe, setCreatingRecipe] = useState(false)
+  const [createRecipeName, setCreateRecipeName] = useState('')
+  const [createRecipeDescription, setCreateRecipeDescription] = useState('')
+  const [createRecipeCalories, setCreateRecipeCalories] = useState<string>('')
+  const [createRecipeProtein, setCreateRecipeProtein] = useState<string>('')
+  const [createRecipeCarbs, setCreateRecipeCarbs] = useState<string>('')
+  const [createRecipeFat, setCreateRecipeFat] = useState<string>('')
+  const [createRecipeType, setCreateRecipeType] = useState('')
+  const [createRecipeIngredients, setCreateRecipeIngredients] = useState<
+    { ingredientId: number; quantity: string }[]
+  >([])
+  const [createRecipeImageFile, setCreateRecipeImageFile] = useState<File | null>(null)
+  const [createRecipeLoading, setCreateRecipeLoading] = useState(false)
+  const [createRecipeError, setCreateRecipeError] = useState<string | null>(null)
+
+  const [deleteRecipeLoadingId, setDeleteRecipeLoadingId] = useState<number | null>(null)
+  const [availableIngredients, setAvailableIngredients] = useState<Ingredient[]>([])
 
   const [userMonthlyStats, setUserMonthlyStats] = useState<UserMonthlyStats[]>([])
   const [exerciseRanking, setExerciseRanking] = useState<ExerciseMonthlyRanking[]>([])
@@ -317,7 +460,9 @@ function App() {
         }
       })()
 
-      fetchExercises(page)
+      if (activeTab === 'exercises') {
+        fetchExercises(page)
+      }
     } else {
       setExercisesPage(null)
       setMuscleGroupOptions([])
@@ -329,10 +474,75 @@ function App() {
     selectedCategory,
     selectedMuscleGroups,
     selectedActivityLevel,
-    exerciseName,
     pageSize,
     exerciseSubTab,
+    activeTab,
   ])
+
+  useEffect(() => {
+    if (isLoggedIn && activeTab === 'foods') {
+      if (foodSubTab === 'ingredients') {
+        fetchIngredients(ingredientPage)
+      } else if (foodSubTab === 'recipes') {
+        fetchRecipes(recipePage)
+        fetchAvailableIngredients()
+      }
+    } else {
+      if (activeTab !== 'foods') {
+        setIngredientsPage(null)
+        setRecipesPage(null)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    isLoggedIn,
+    activeTab,
+    foodSubTab,
+    ingredientPage,
+    ingredientPageSize,
+    ingredientSort,
+    recipePage,
+    recipePageSize,
+  ])
+
+  // Debounce search for exercises
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'exercises') return
+
+    const timeoutId = setTimeout(() => {
+      setPage(0)
+      fetchExercises(0)
+    }, 500)
+
+    return () => clearTimeout(timeoutId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [exerciseName, isLoggedIn, activeTab])
+
+  // Debounce search for ingredients
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'foods' || foodSubTab !== 'ingredients') return
+
+    const timeoutId = setTimeout(() => {
+      setIngredientPage(0)
+      fetchIngredients(0)
+    }, 500)
+
+    return () => clearTimeout(timeoutId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ingredientName, isLoggedIn, activeTab, foodSubTab])
+
+  // Debounce search for recipes
+  useEffect(() => {
+    if (!isLoggedIn || activeTab !== 'foods' || foodSubTab !== 'recipes') return
+
+    const timeoutId = setTimeout(() => {
+      setRecipePage(0)
+      fetchRecipes(0)
+    }, 500)
+
+    return () => clearTimeout(timeoutId)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recipeName, isLoggedIn, activeTab, foodSubTab])
 
   useEffect(() => {
     if (isLoggedIn && activeTab === 'overview') {
@@ -340,6 +550,671 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, activeTab, selectedYear, selectedMonth])
+
+  const fetchIngredients = async (pageNumber: number) => {
+    setLoadingIngredients(true)
+    setIngredientError(null)
+
+    try {
+      const params = new URLSearchParams({
+        page: String(pageNumber),
+        size: String(ingredientPageSize),
+        sort: ingredientSort,
+      })
+
+      if (ingredientName.trim()) {
+        params.append('search', ingredientName.trim())
+      }
+
+      const res = await fetch(`${API_BASE}/api/ingredients?${params.toString()}`, {
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Lấy nguyên liệu lỗi ${res.status}`)
+      }
+
+      const data: IngredientPage = await res.json()
+      setIngredientsPage(data)
+    } catch (err: any) {
+      console.error(err)
+      setIngredientError(err.message ?? 'Không lấy được danh sách nguyên liệu')
+    } finally {
+      setLoadingIngredients(false)
+    }
+  }
+
+  const handleCreateIngredient = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!createIngredientName.trim()) {
+      setCreateIngredientError('Tên nguyên liệu là bắt buộc')
+      return
+    }
+
+    try {
+      setCreateIngredientLoading(true)
+      setCreateIngredientError(null)
+
+      const formData = new FormData()
+      formData.append('name', createIngredientName.trim())
+      if (createIngredientDescription.trim()) {
+        formData.append('description', createIngredientDescription.trim())
+      }
+      if (createIngredientCalories.trim()) {
+        const calories = Number(createIngredientCalories)
+        if (!Number.isNaN(calories) && calories >= 0) {
+          formData.append('calories', String(calories))
+        }
+      }
+      if (createIngredientProtein.trim()) {
+        const protein = Number(createIngredientProtein)
+        if (!Number.isNaN(protein) && protein >= 0) {
+          formData.append('protein', String(protein))
+        }
+      }
+      if (createIngredientCarbs.trim()) {
+        const carbs = Number(createIngredientCarbs)
+        if (!Number.isNaN(carbs) && carbs >= 0) {
+          formData.append('carbs', String(carbs))
+        }
+      }
+      if (createIngredientFat.trim()) {
+        const fat = Number(createIngredientFat)
+        if (!Number.isNaN(fat) && fat >= 0) {
+          formData.append('fat', String(fat))
+        }
+      }
+      if (createIngredientImageFile) {
+        formData.append('image', createIngredientImageFile)
+      }
+
+      const res = await fetch(`${API_BASE}/api/ingredients`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Tạo nguyên liệu thất bại (${res.status})`)
+      }
+
+      const created: Ingredient = await res.json()
+      setIngredientsPage((prev) =>
+        prev
+          ? {
+              ...prev,
+              content: [created, ...prev.content],
+              page: {
+                ...prev.page,
+                totalElements: prev.page.totalElements + 1,
+              },
+            }
+          : prev,
+      )
+
+      // Reset form
+      setCreateIngredientName('')
+      setCreateIngredientDescription('')
+      setCreateIngredientCalories('')
+      setCreateIngredientProtein('')
+      setCreateIngredientCarbs('')
+      setCreateIngredientFat('')
+      setCreateIngredientImageFile(null)
+      setCreatingIngredient(false)
+    } catch (err: any) {
+      console.error(err)
+      setCreateIngredientError(err.message ?? 'Tạo nguyên liệu thất bại')
+    } finally {
+      setCreateIngredientLoading(false)
+    }
+  }
+
+  const openEditIngredient = (ingredient: Ingredient) => {
+    setEditingIngredient(ingredient)
+    setEditIngredientName(ingredient.name)
+    setEditIngredientDescription(ingredient.description || '')
+    setEditIngredientCalories(String(ingredient.calories ?? ''))
+    setEditIngredientProtein(String(ingredient.protein ?? ''))
+    setEditIngredientCarbs(String(ingredient.carbs ?? ''))
+    setEditIngredientFat(String(ingredient.fat ?? ''))
+    setEditIngredientImageFile(null)
+    setEditIngredientError(null)
+  }
+
+  const closeEditIngredient = () => {
+    setEditingIngredient(null)
+    setEditIngredientImageFile(null)
+    setEditIngredientError(null)
+  }
+
+  const handleUpdateIngredient = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editingIngredient) return
+
+    try {
+      setEditIngredientLoading(true)
+      setEditIngredientError(null)
+
+      const formData = new FormData()
+      formData.append('name', editIngredientName.trim())
+      if (editIngredientDescription.trim()) {
+        formData.append('description', editIngredientDescription.trim())
+      }
+      if (editIngredientCalories.trim()) {
+        const calories = Number(editIngredientCalories)
+        if (!Number.isNaN(calories) && calories >= 0) {
+          formData.append('calories', String(calories))
+        }
+      }
+      if (editIngredientProtein.trim()) {
+        const protein = Number(editIngredientProtein)
+        if (!Number.isNaN(protein) && protein >= 0) {
+          formData.append('protein', String(protein))
+        }
+      }
+      if (editIngredientCarbs.trim()) {
+        const carbs = Number(editIngredientCarbs)
+        if (!Number.isNaN(carbs) && carbs >= 0) {
+          formData.append('carbs', String(carbs))
+        }
+      }
+      if (editIngredientFat.trim()) {
+        const fat = Number(editIngredientFat)
+        if (!Number.isNaN(fat) && fat >= 0) {
+          formData.append('fat', String(fat))
+        }
+      }
+      if (editIngredientImageFile) {
+        formData.append('image', editIngredientImageFile)
+      }
+
+      const res = await fetch(
+        `${API_BASE}/api/ingredients/${editingIngredient.id}`,
+        {
+          method: 'PUT',
+          body: formData,
+          headers: {
+            Authorization: `Bearer ${user?.token}`,
+          },
+        },
+      )
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Cập nhật nguyên liệu thất bại (${res.status})`)
+      }
+
+      const updated: Ingredient = await res.json()
+
+      setIngredientsPage((prev) =>
+        prev
+          ? {
+              ...prev,
+              content: prev.content.map((ing) =>
+                ing.id === updated.id ? updated : ing,
+              ),
+            }
+          : prev,
+      )
+
+      closeEditIngredient()
+    } catch (err: any) {
+      console.error(err)
+      setEditIngredientError(err.message ?? 'Cập nhật nguyên liệu thất bại')
+    } finally {
+      setEditIngredientLoading(false)
+    }
+  }
+
+  const handleDeleteIngredient = async (id: number) => {
+    if (
+      !window.confirm(
+        'Bạn có chắc chắn muốn xóa nguyên liệu này? Hành động này không thể hoàn tác.',
+      )
+    ) {
+      return
+    }
+
+    try {
+      setDeleteIngredientLoadingId(id)
+      const res = await fetch(`${API_BASE}/api/ingredients/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Xóa nguyên liệu thất bại (${res.status})`)
+      }
+
+      setIngredientsPage((prev) =>
+        prev
+          ? {
+              ...prev,
+              content: prev.content.filter((ing) => ing.id !== id),
+              page: {
+                ...prev.page,
+                totalElements: prev.page.totalElements - 1,
+              },
+            }
+          : prev,
+      )
+    } catch (err: any) {
+      console.error(err)
+      alert(err.message ?? 'Xóa nguyên liệu thất bại')
+    } finally {
+      setDeleteIngredientLoadingId(null)
+    }
+  }
+
+  const handleDownloadIngredientTemplate = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/ingredients/excel/template`, {
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Không tải được template (${res.status})`)
+      }
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'ingredient_import_template.xlsx'
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      console.error(err)
+      alert(err.message ?? 'Không tải được template')
+    }
+  }
+
+  const handleImportIngredients = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!ingredientExcelFile) {
+      setIngredientImportError('Vui lòng chọn file Excel.')
+      return
+    }
+
+    setIngredientImportLoading(true)
+    setIngredientImportError(null)
+    setIngredientImportResult(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', ingredientExcelFile)
+
+      ingredientImageFiles.forEach((file) => {
+        formData.append('images', file)
+      })
+
+      const res = await fetch(`${API_BASE}/api/ingredients/excel/import`, {
+        method: 'POST',
+        body: formData,
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Import thất bại (${res.status})`)
+      }
+
+      const data: IngredientImportResponse = await res.json()
+      setIngredientImportResult(data)
+      // Sau khi import thành công, reload danh sách hiện tại
+      fetchIngredients(ingredientPage)
+    } catch (err: any) {
+      console.error(err)
+      setIngredientImportError(err.message ?? 'Import thất bại')
+    } finally {
+      setIngredientImportLoading(false)
+    }
+  }
+
+  const fetchRecipes = async (pageNumber: number) => {
+    setLoadingRecipes(true)
+    setRecipeError(null)
+
+    try {
+      const params = new URLSearchParams({
+        page: String(pageNumber),
+        size: String(recipePageSize),
+      })
+
+      if (recipeName.trim()) {
+        params.append('name', recipeName.trim())
+      }
+
+      const res = await fetch(`${API_BASE}/api/recipes?${params.toString()}`, {
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Lấy món ăn lỗi ${res.status}`)
+      }
+
+      const data: RecipePage = await res.json()
+      setRecipesPage(data)
+    } catch (err: any) {
+      console.error(err)
+      setRecipeError(err.message ?? 'Không lấy được danh sách món ăn')
+    } finally {
+      setLoadingRecipes(false)
+    }
+  }
+
+  const fetchAvailableIngredients = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/ingredients?page=0&size=1000`, {
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+      if (!res.ok) return
+      const data: IngredientPage = await res.json()
+      setAvailableIngredients(data.content)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleCreateRecipe = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!createRecipeName.trim()) {
+      setCreateRecipeError('Tên món ăn là bắt buộc')
+      return
+    }
+
+    try {
+      setCreateRecipeLoading(true)
+      setCreateRecipeError(null)
+
+      const formData = new FormData()
+      formData.append('name', createRecipeName.trim())
+      if (createRecipeDescription.trim()) {
+        formData.append('description', createRecipeDescription.trim())
+      }
+      if (createRecipeCalories.trim()) {
+        const calories = Number(createRecipeCalories)
+        if (!Number.isNaN(calories) && calories >= 0) {
+          formData.append('calories', String(calories))
+        }
+      }
+      if (createRecipeProtein.trim()) {
+        const protein = Number(createRecipeProtein)
+        if (!Number.isNaN(protein) && protein >= 0) {
+          formData.append('protein', String(protein))
+        }
+      }
+      if (createRecipeCarbs.trim()) {
+        const carbs = Number(createRecipeCarbs)
+        if (!Number.isNaN(carbs) && carbs >= 0) {
+          formData.append('carbs', String(carbs))
+        }
+      }
+      if (createRecipeFat.trim()) {
+        const fat = Number(createRecipeFat)
+        if (!Number.isNaN(fat) && fat >= 0) {
+          formData.append('fat', String(fat))
+        }
+      }
+      if (createRecipeType.trim()) {
+        formData.append('type', createRecipeType.trim())
+      }
+
+      createRecipeIngredients.forEach((ri, index) => {
+        if (ri.ingredientId && ri.quantity.trim()) {
+          formData.append(`recipeIngredients[${index}].ingredient.id`, String(ri.ingredientId))
+          formData.append(`recipeIngredients[${index}].quantity`, ri.quantity.trim())
+        }
+      })
+
+      if (createRecipeImageFile) {
+        formData.append('image', createRecipeImageFile)
+      }
+
+      const res = await fetch(`${API_BASE}/api/recipes`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Tạo món ăn thất bại (${res.status})`)
+      }
+
+      const created: Recipe = await res.json()
+      setRecipesPage((prev) =>
+        prev
+          ? {
+              ...prev,
+              content: [created, ...prev.content],
+              page: {
+                ...prev.page,
+                totalElements: prev.page.totalElements + 1,
+              },
+            }
+          : prev,
+      )
+
+      // Reset form
+      setCreateRecipeName('')
+      setCreateRecipeDescription('')
+      setCreateRecipeCalories('')
+      setCreateRecipeProtein('')
+      setCreateRecipeCarbs('')
+      setCreateRecipeFat('')
+      setCreateRecipeType('')
+      setCreateRecipeIngredients([])
+      setCreateRecipeImageFile(null)
+      setCreatingRecipe(false)
+    } catch (err: any) {
+      console.error(err)
+      setCreateRecipeError(err.message ?? 'Tạo món ăn thất bại')
+    } finally {
+      setCreateRecipeLoading(false)
+    }
+  }
+
+  const openEditRecipe = (recipe: Recipe) => {
+    setEditingRecipe(recipe)
+    setEditRecipeName(recipe.name)
+    setEditRecipeDescription(recipe.description || '')
+    setEditRecipeCalories(String(recipe.calories ?? ''))
+    setEditRecipeProtein(String(recipe.protein ?? ''))
+    setEditRecipeCarbs(String(recipe.carbs ?? ''))
+    setEditRecipeFat(String(recipe.fat ?? ''))
+    setEditRecipeType(recipe.type || '')
+    setEditRecipeIngredients(
+      recipe.recipeIngredients?.map((ri) => ({
+        ingredientId: ri.ingredient.id,
+        quantity: String(ri.quantity),
+      })) || [],
+    )
+    setEditRecipeImageFile(null)
+    setEditRecipeError(null)
+  }
+
+  const closeEditRecipe = () => {
+    setEditingRecipe(null)
+    setEditRecipeImageFile(null)
+    setEditRecipeError(null)
+  }
+
+  const handleUpdateRecipe = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editingRecipe) return
+
+    try {
+      setEditRecipeLoading(true)
+      setEditRecipeError(null)
+
+      const formData = new FormData()
+      formData.append('name', editRecipeName.trim())
+      if (editRecipeDescription.trim()) {
+        formData.append('description', editRecipeDescription.trim())
+      }
+      if (editRecipeCalories.trim()) {
+        const calories = Number(editRecipeCalories)
+        if (!Number.isNaN(calories) && calories >= 0) {
+          formData.append('calories', String(calories))
+        }
+      }
+      if (editRecipeProtein.trim()) {
+        const protein = Number(editRecipeProtein)
+        if (!Number.isNaN(protein) && protein >= 0) {
+          formData.append('protein', String(protein))
+        }
+      }
+      if (editRecipeCarbs.trim()) {
+        const carbs = Number(editRecipeCarbs)
+        if (!Number.isNaN(carbs) && carbs >= 0) {
+          formData.append('carbs', String(carbs))
+        }
+      }
+      if (editRecipeFat.trim()) {
+        const fat = Number(editRecipeFat)
+        if (!Number.isNaN(fat) && fat >= 0) {
+          formData.append('fat', String(fat))
+        }
+      }
+      if (editRecipeType.trim()) {
+        formData.append('type', editRecipeType.trim())
+      }
+
+      editRecipeIngredients.forEach((ri, index) => {
+        if (ri.ingredientId && ri.quantity.trim()) {
+          formData.append(`recipeIngredients[${index}].ingredient.id`, String(ri.ingredientId))
+          formData.append(`recipeIngredients[${index}].quantity`, ri.quantity.trim())
+        }
+      })
+
+      if (editRecipeImageFile) {
+        formData.append('image', editRecipeImageFile)
+      }
+
+      const res = await fetch(`${API_BASE}/api/recipes/${editingRecipe.id}`, {
+        method: 'PUT',
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Cập nhật món ăn thất bại (${res.status})`)
+      }
+
+      const updated: Recipe = await res.json()
+
+      setRecipesPage((prev) =>
+        prev
+          ? {
+              ...prev,
+              content: prev.content.map((r) => (r.id === updated.id ? updated : r)),
+            }
+          : prev,
+      )
+
+      closeEditRecipe()
+    } catch (err: any) {
+      console.error(err)
+      setEditRecipeError(err.message ?? 'Cập nhật món ăn thất bại')
+    } finally {
+      setEditRecipeLoading(false)
+    }
+  }
+
+  const handleDeleteRecipe = async (id: number) => {
+    if (
+      !window.confirm(
+        'Bạn có chắc chắn muốn xóa món ăn này? Hành động này không thể hoàn tác.',
+      )
+    ) {
+      return
+    }
+
+    try {
+      setDeleteRecipeLoadingId(id)
+      const res = await fetch(`${API_BASE}/api/recipes/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Xóa món ăn thất bại (${res.status})`)
+      }
+
+      setRecipesPage((prev) =>
+        prev
+          ? {
+              ...prev,
+              content: prev.content.filter((r) => r.id !== id),
+              page: {
+                ...prev.page,
+                totalElements: prev.page.totalElements - 1,
+              },
+            }
+          : prev,
+      )
+    } catch (err: any) {
+      console.error(err)
+      alert(err.message ?? 'Xóa món ăn thất bại')
+    } finally {
+      setDeleteRecipeLoadingId(null)
+    }
+  }
+
+  const addRecipeIngredient = (
+    ingredients: { ingredientId: number; quantity: string }[],
+    setIngredients: (ingredients: { ingredientId: number; quantity: string }[]) => void,
+  ) => {
+    setIngredients([...ingredients, { ingredientId: 0, quantity: '' }])
+  }
+
+  const removeRecipeIngredient = (
+    index: number,
+    ingredients: { ingredientId: number; quantity: string }[],
+    setIngredients: (ingredients: { ingredientId: number; quantity: string }[]) => void,
+  ) => {
+    setIngredients(ingredients.filter((_, i) => i !== index))
+  }
 
   const handleLogout = () => {
     setUser(null)
@@ -358,6 +1233,21 @@ function App() {
     setExcelImageRows([])
     setImageMappings([])
     setEditingExercise(null)
+    setIngredientsPage(null)
+    setIngredientPage(0)
+    setIngredientName('')
+    setEditingIngredient(null)
+    setCreatingIngredient(false)
+    setIngredientExcelFile(null)
+    setIngredientImageFiles([])
+    setIngredientImportResult(null)
+    setIngredientImportError(null)
+    setRecipesPage(null)
+    setRecipePage(0)
+    setRecipeName('')
+    setEditingRecipe(null)
+    setCreatingRecipe(false)
+    setAvailableIngredients([])
   }
 
   const openEditExercise = (exercise: Exercise) => {
@@ -755,6 +1645,13 @@ function App() {
               >
                 Quản lý bài tập
               </button>
+              <button
+                type="button"
+                className={`tab ${activeTab === 'foods' ? 'active' : ''}`}
+                onClick={() => setActiveTab('foods')}
+              >
+                Quản lí món ăn
+              </button>
             </div>
 
             {activeTab === 'overview' && (
@@ -997,25 +1894,41 @@ function App() {
                             type="text"
                             placeholder="Tìm theo tên bài tập..."
                             value={exerciseName}
-                            onChange={(e) => {
-                              setPage(0)
-                              setExerciseName(e.target.value)
-                            }}
+                            onChange={(e) => setExerciseName(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
+                                setPage(0)
                                 fetchExercises(0)
                               }
                             }}
                           />
+                          <button
+                            className="btn primary"
+                            type="button"
+                            onClick={() => {
+                              setPage(0)
+                              fetchExercises(0)
+                            }}
+                            disabled={loadingExercises}
+                            title="Tìm kiếm"
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M7.333 12.667A5.333 5.333 0 1 0 7.333 2a5.333 5.333 0 0 0 0 10.667ZM14 14l-2.9-2.9"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </button>
                         </div>
-                        <button
-                          className="btn outline"
-                          type="button"
-                          onClick={() => fetchExercises(page)}
-                          disabled={loadingExercises}
-                        >
-                          {loadingExercises ? 'Đang tải...' : 'Tải lại'}
-        </button>
                       </div>
                     </div>
 
@@ -1091,10 +2004,7 @@ function App() {
                     {exerciseError && <p className="error-text">{exerciseError}</p>}
 
                     {!exercisesPage && !loadingExercises && (
-                      <p>
-                        Chưa có dữ liệu, điều chỉnh filter hoặc nhấn
-                        &quot;Tải lại&quot; để lấy danh sách.
-                      </p>
+                      <p>Chưa có dữ liệu, điều chỉnh filter để lấy danh sách.</p>
                     )}
 
                     {exercisesPage && (
@@ -1526,6 +2436,1165 @@ function App() {
                           disabled={editLoading}
                         >
                           {editLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                )}
+              </>
+            )}
+
+            {activeTab === 'foods' && (
+              <>
+                <div className="subtabs">
+                  <button
+                    type="button"
+                    className={`subtab ${foodSubTab === 'ingredients' ? 'active' : ''}`}
+                    onClick={() => setFoodSubTab('ingredients')}
+                  >
+                    Quản lí nguyên liệu
+                  </button>
+                  <button
+                    type="button"
+                    className={`subtab ${foodSubTab === 'recipes' ? 'active' : ''}`}
+                    onClick={() => setFoodSubTab('recipes')}
+                  >
+                    Quản lí món ăn
+                  </button>
+                </div>
+
+                {foodSubTab === 'ingredients' && !editingIngredient && !creatingIngredient && (
+                  <section className="card">
+                    <div className="card-header">
+                      <h2>Danh sách nguyên liệu</h2>
+                      <div className="card-header-actions">
+                        <div className="search-input">
+                          <input
+                            type="text"
+                            placeholder="Tìm theo tên nguyên liệu..."
+                            value={ingredientName}
+                            onChange={(e) => setIngredientName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                setIngredientPage(0)
+                                fetchIngredients(0)
+                              }
+                            }}
+                          />
+                          <button
+                            className="btn primary"
+                            type="button"
+                            onClick={() => {
+                              setIngredientPage(0)
+                              fetchIngredients(0)
+                            }}
+                            disabled={loadingIngredients}
+                            title="Tìm kiếm"
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M7.333 12.667A5.333 5.333 0 1 0 7.333 2a5.333 5.333 0 0 0 0 10.667ZM14 14l-2.9-2.9"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                        <button
+                          className="btn primary"
+                          type="button"
+                          onClick={() => setCreatingIngredient(true)}
+                        >
+                          + Tạo mới
+                        </button>
+                      </div>
+                    </div>
+
+                    {ingredientError && <p className="error-text">{ingredientError}</p>}
+
+                    {!ingredientsPage && !loadingIngredients && (
+                      <p>Chưa có dữ liệu, điều chỉnh filter để lấy danh sách.</p>
+                    )}
+
+                    {ingredientsPage && (
+                      <>
+                        <div className="table-wrapper">
+                          <table className="table">
+                            <thead>
+                              <tr>
+                                <th>ID</th>
+                                <th>Tên</th>
+                                <th>Mô tả</th>
+                                <th>Calories</th>
+                                <th>Protein (g)</th>
+                                <th>Carbs (g)</th>
+                                <th>Fat (g)</th>
+                                <th>Ảnh</th>
+                                <th>Hành động</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {ingredientsPage.content.map((ing) => (
+                                <tr key={ing.id}>
+                                  <td>{ing.id}</td>
+                                  <td>{ing.name}</td>
+                                  <td>{ing.description || '-'}</td>
+                                  <td>{ing.calories ?? '-'}</td>
+                                  <td>{ing.protein ?? '-'}</td>
+                                  <td>{ing.carbs ?? '-'}</td>
+                                  <td>{ing.fat ?? '-'}</td>
+                                  <td>
+                                    {ing.imageUrl && (
+                                      <img
+                                        src={ing.imageUrl}
+                                        alt={ing.name}
+                                        className="exercise-image"
+                                      />
+                                    )}
+                                  </td>
+                                  <td>
+                                    <div className="table-actions">
+                                      <button
+                                        type="button"
+                                        className="btn small"
+                                        onClick={() => openEditIngredient(ing)}
+                                      >
+                                        Sửa
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn small danger"
+                                        onClick={() => handleDeleteIngredient(ing.id)}
+                                        disabled={deleteIngredientLoadingId === ing.id}
+                                      >
+                                        {deleteIngredientLoadingId === ing.id
+                                          ? 'Đang xóa...'
+                                          : 'Xóa'}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="pagination">
+                          <button
+                            className="btn"
+                            disabled={ingredientPage <= 0 || loadingIngredients}
+                            onClick={() =>
+                              setIngredientPage((p) => Math.max(0, p - 1))
+                            }
+                          >
+                            Trang trước
+                          </button>
+                          <span>
+                            Trang {ingredientsPage.page.number + 1} /{' '}
+                            {ingredientsPage.page.totalPages}
+                          </span>
+                          <button
+                            className="btn"
+                            disabled={
+                              ingredientPage >= ingredientsPage.page.totalPages - 1 ||
+                              loadingIngredients
+                            }
+                            onClick={() =>
+                              setIngredientPage((p) =>
+                                Math.min(
+                                  ingredientsPage.page.totalPages - 1,
+                                  p + 1,
+                                ),
+                              )
+                            }
+                          >
+                            Trang sau
+                          </button>
+                          <select
+                            value={ingredientPageSize}
+                            onChange={(e) => {
+                              const newSize = Number(e.target.value) || 10
+                              setIngredientPage(0)
+                              setIngredientPageSize(newSize)
+                              fetchIngredients(0)
+                            }}
+                          >
+                            {[5, 10, 20, 50].map((size) => (
+                              <option key={size} value={size}>
+                                {size} items / trang
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={ingredientSort}
+                            onChange={(e) => {
+                              setIngredientPage(0)
+                              setIngredientSort(e.target.value)
+                              fetchIngredients(0)
+                            }}
+                          >
+                            <option value="name,asc">Tên A-Z</option>
+                            <option value="name,desc">Tên Z-A</option>
+                            <option value="calories,asc">Calories tăng dần</option>
+                            <option value="calories,desc">Calories giảm dần</option>
+                          </select>
+                        </div>
+                      </>
+                    )}
+                  </section>
+                )}
+
+                {foodSubTab === 'ingredients' && creatingIngredient && (
+                  <section className="card edit-card">
+                    <div className="card-header">
+                      <h2>Tạo nguyên liệu mới</h2>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          setCreatingIngredient(false)
+                          setCreateIngredientError(null)
+                        }}
+                      >
+                        Quay lại
+                      </button>
+                    </div>
+                    <form className="form" onSubmit={handleCreateIngredient}>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>
+                            Tên nguyên liệu <span style={{ color: 'red' }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={createIngredientName}
+                            onChange={(e) => setCreateIngredientName(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Mô tả</label>
+                        <textarea
+                          rows={3}
+                          value={createIngredientDescription}
+                          onChange={(e) =>
+                            setCreateIngredientDescription(e.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Calories ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={createIngredientCalories}
+                            onChange={(e) => setCreateIngredientCalories(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Protein (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={createIngredientProtein}
+                            onChange={(e) => setCreateIngredientProtein(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Carbs (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={createIngredientCarbs}
+                            onChange={(e) => setCreateIngredientCarbs(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Fat (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={createIngredientFat}
+                            onChange={(e) => setCreateIngredientFat(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Ảnh (tuỳ chọn)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null
+                            setCreateIngredientImageFile(file)
+                          }}
+                        />
+                      </div>
+
+                      {createIngredientError && (
+                        <p className="error-text">{createIngredientError}</p>
+                      )}
+
+                      <div className="edit-actions">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={() => {
+                            setCreatingIngredient(false)
+                            setCreateIngredientError(null)
+                          }}
+                          disabled={createIngredientLoading}
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn primary"
+                          disabled={createIngredientLoading}
+                        >
+                          {createIngredientLoading ? 'Đang tạo...' : 'Tạo nguyên liệu'}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                )}
+
+                {foodSubTab === 'ingredients' && editingIngredient && (
+                  <section className="card edit-card">
+                    <div className="card-header">
+                      <h2>Chỉnh sửa nguyên liệu #{editingIngredient.id}</h2>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          setEditingIngredient(null)
+                          setEditIngredientError(null)
+                        }}
+                      >
+                        Quay lại
+                      </button>
+                    </div>
+                    <form className="form" onSubmit={handleUpdateIngredient}>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>
+                            Tên nguyên liệu <span style={{ color: 'red' }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={editIngredientName}
+                            onChange={(e) => setEditIngredientName(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Mô tả</label>
+                        <textarea
+                          rows={3}
+                          value={editIngredientDescription}
+                          onChange={(e) =>
+                            setEditIngredientDescription(e.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Calories ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editIngredientCalories}
+                            onChange={(e) => setEditIngredientCalories(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Protein (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editIngredientProtein}
+                            onChange={(e) => setEditIngredientProtein(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Carbs (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editIngredientCarbs}
+                            onChange={(e) => setEditIngredientCarbs(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Fat (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editIngredientFat}
+                            onChange={(e) => setEditIngredientFat(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Ảnh mới (tuỳ chọn)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null
+                            setEditIngredientImageFile(file)
+                          }}
+                        />
+                        {editingIngredient.imageUrl && !editIngredientImageFile && (
+                          <p className="helper-text">
+                            Ảnh hiện tại:
+                            <br />
+                            <img
+                              src={editingIngredient.imageUrl}
+                              alt={editingIngredient.name}
+                              className="exercise-image"
+                            />
+                          </p>
+                        )}
+                      </div>
+
+                      {editIngredientError && (
+                        <p className="error-text">{editIngredientError}</p>
+                      )}
+
+                      <div className="edit-actions">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={closeEditIngredient}
+                          disabled={editIngredientLoading}
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn primary"
+                          disabled={editIngredientLoading}
+                        >
+                          {editIngredientLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                )}
+
+                {foodSubTab === 'ingredients' && !editingIngredient && !creatingIngredient && (
+                  <section className="card" style={{ marginTop: '1rem' }}>
+                    <div className="card-header">
+                      <h2>Import nguyên liệu từ Excel</h2>
+                      <button
+                        type="button"
+                        className="btn outline"
+                        onClick={handleDownloadIngredientTemplate}
+                      >
+                        Tải template
+                      </button>
+                    </div>
+
+                    <p className="helper-text">
+                      File Excel cần có các cột:{' '}
+                      <code>
+                        Name, Description, Calories, Protein (g), Carbs (g), Fat (g),
+                        Image File Name
+                      </code>
+                      . Cột <code>Image File Name</code> phải trùng với tên file ảnh bạn
+                      upload bên dưới. Name là trường bắt buộc.
+                    </p>
+
+                    <form className="form" onSubmit={handleImportIngredients}>
+                      <div className="form-group">
+                        <label>File Excel</label>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null
+                            setIngredientExcelFile(file)
+                          }}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label>Ảnh nguyên liệu (nhiều file)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          onChange={(e) => {
+                            const files = Array.from(e.target.files ?? [])
+                            setIngredientImageFiles(files)
+                          }}
+                        />
+                        {ingredientImageFiles.length > 0 && (
+                          <p className="helper-text">
+                            Đã chọn {ingredientImageFiles.length} ảnh. Đảm bảo tên file
+                            trùng với cột <code>Image File Name</code> trong Excel.
+                          </p>
+                        )}
+                      </div>
+
+                      {ingredientImportError && (
+                        <p className="error-text">{ingredientImportError}</p>
+                      )}
+
+                      <button
+                        className="btn primary"
+                        type="submit"
+                        disabled={ingredientImportLoading}
+                      >
+                        {ingredientImportLoading ? 'Đang import...' : 'Import'}
+                      </button>
+                    </form>
+
+                    {ingredientImportResult && (
+                      <div className="import-result">
+                        {ingredientImportResult.success ? (
+                          <p>
+                            <strong>Thành công!</strong> Đã import{' '}
+                            {ingredientImportResult.totalImported || 0} nguyên liệu
+                            {ingredientImportResult.totalImages
+                              ? ` với ${ingredientImportResult.totalImages} ảnh`
+                              : ''}
+                            .
+                          </p>
+                        ) : (
+                          <>
+                            <p>
+                              <strong>Lỗi:</strong> {ingredientImportResult.message}
+                            </p>
+                            {ingredientImportResult.errors && (
+                              <p className="error-text">{ingredientImportResult.errors}</p>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                {foodSubTab === 'recipes' && !editingRecipe && !creatingRecipe && (
+                  <section className="card">
+                    <div className="card-header">
+                      <h2>Danh sách món ăn</h2>
+                      <div className="card-header-actions">
+                        <div className="search-input">
+                          <input
+                            type="text"
+                            placeholder="Tìm theo tên món ăn..."
+                            value={recipeName}
+                            onChange={(e) => setRecipeName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                setRecipePage(0)
+                                fetchRecipes(0)
+                              }
+                            }}
+                          />
+                          <button
+                            className="btn primary"
+                            type="button"
+                            onClick={() => {
+                              setRecipePage(0)
+                              fetchRecipes(0)
+                            }}
+                            disabled={loadingRecipes}
+                            title="Tìm kiếm"
+                          >
+                            <svg
+                              width="16"
+                              height="16"
+                              viewBox="0 0 16 16"
+                              fill="none"
+                              xmlns="http://www.w3.org/2000/svg"
+                            >
+                              <path
+                                d="M7.333 12.667A5.333 5.333 0 1 0 7.333 2a5.333 5.333 0 0 0 0 10.667ZM14 14l-2.9-2.9"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                        <button
+                          className="btn primary"
+                          type="button"
+                          onClick={() => setCreatingRecipe(true)}
+                        >
+                          + Tạo mới
+                        </button>
+                      </div>
+                    </div>
+
+                    {recipeError && <p className="error-text">{recipeError}</p>}
+
+                    {!recipesPage && !loadingRecipes && (
+                      <p>Chưa có dữ liệu, điều chỉnh filter để lấy danh sách.</p>
+                    )}
+
+                    {recipesPage && (
+                      <>
+                        <div className="table-wrapper">
+                          <table className="table">
+                            <thead>
+                              <tr>
+                                <th>ID</th>
+                                <th>Tên</th>
+                                <th>Mô tả</th>
+                                <th>Loại</th>
+                                <th>Calories</th>
+                                <th>Protein (g)</th>
+                                <th>Carbs (g)</th>
+                                <th>Fat (g)</th>
+                                <th>Ảnh</th>
+                                <th>Hành động</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {recipesPage.content.map((recipe) => (
+                                <tr key={recipe.id}>
+                                  <td>{recipe.id}</td>
+                                  <td>{recipe.name}</td>
+                                  <td>{recipe.description || '-'}</td>
+                                  <td>{recipe.type || '-'}</td>
+                                  <td>{recipe.calories ?? '-'}</td>
+                                  <td>{recipe.protein ?? '-'}</td>
+                                  <td>{recipe.carbs ?? '-'}</td>
+                                  <td>{recipe.fat ?? '-'}</td>
+                                  <td>
+                                    {recipe.imageUrl && (
+                                      <img
+                                        src={recipe.imageUrl}
+                                        alt={recipe.name}
+                                        className="exercise-image"
+                                      />
+                                    )}
+                                  </td>
+                                  <td>
+                                    <div className="table-actions">
+                                      <button
+                                        type="button"
+                                        className="btn small"
+                                        onClick={() => openEditRecipe(recipe)}
+                                      >
+                                        Sửa
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn small danger"
+                                        onClick={() => handleDeleteRecipe(recipe.id)}
+                                        disabled={deleteRecipeLoadingId === recipe.id}
+                                      >
+                                        {deleteRecipeLoadingId === recipe.id
+                                          ? 'Đang xóa...'
+                                          : 'Xóa'}
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <div className="pagination">
+                          <button
+                            className="btn"
+                            disabled={recipePage <= 0 || loadingRecipes}
+                            onClick={() => setRecipePage((p) => Math.max(0, p - 1))}
+                          >
+                            Trang trước
+                          </button>
+                          <span>
+                            Trang {recipesPage.page.number + 1} /{' '}
+                            {recipesPage.page.totalPages}
+                          </span>
+                          <button
+                            className="btn"
+                            disabled={
+                              recipePage >= recipesPage.page.totalPages - 1 ||
+                              loadingRecipes
+                            }
+                            onClick={() =>
+                              setRecipePage((p) =>
+                                Math.min(recipesPage.page.totalPages - 1, p + 1),
+                              )
+                            }
+                          >
+                            Trang sau
+                          </button>
+                          <select
+                            value={recipePageSize}
+                            onChange={(e) => {
+                              const newSize = Number(e.target.value) || 10
+                              setRecipePage(0)
+                              setRecipePageSize(newSize)
+                              fetchRecipes(0)
+                            }}
+                          >
+                            {[5, 10, 20, 50].map((size) => (
+                              <option key={size} value={size}>
+                                {size} items / trang
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+                  </section>
+                )}
+
+                {foodSubTab === 'recipes' && creatingRecipe && (
+                  <section className="card edit-card">
+                    <div className="card-header">
+                      <h2>Tạo món ăn mới</h2>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          setCreatingRecipe(false)
+                          setCreateRecipeError(null)
+                        }}
+                      >
+                        Quay lại
+                      </button>
+                    </div>
+                    <form className="form" onSubmit={handleCreateRecipe}>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>
+                            Tên món ăn <span style={{ color: 'red' }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={createRecipeName}
+                            onChange={(e) => setCreateRecipeName(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Loại món ăn</label>
+                          <select
+                            value={createRecipeType}
+                            onChange={(e) => setCreateRecipeType(e.target.value)}
+                          >
+                            <option value="">-- Chọn --</option>
+                            <option value="MAIN_DISH">Món chính</option>
+                            <option value="SIDE_DISH">Món phụ</option>
+                            <option value="APPETIZER">Khai vị</option>
+                            <option value="DESSERT">Tráng miệng</option>
+                            <option value="DRINK">Đồ uống</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Mô tả</label>
+                        <textarea
+                          rows={3}
+                          value={createRecipeDescription}
+                          onChange={(e) => setCreateRecipeDescription(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Calories ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={createRecipeCalories}
+                            onChange={(e) => setCreateRecipeCalories(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Protein (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={createRecipeProtein}
+                            onChange={(e) => setCreateRecipeProtein(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Carbs (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={createRecipeCarbs}
+                            onChange={(e) => setCreateRecipeCarbs(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Fat (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={createRecipeFat}
+                            onChange={(e) => setCreateRecipeFat(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Nguyên liệu</label>
+                        {createRecipeIngredients.map((ri, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              display: 'flex',
+                              gap: '0.5rem',
+                              marginBottom: '0.5rem',
+                              alignItems: 'flex-end',
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <select
+                                value={ri.ingredientId}
+                                onChange={(e) => {
+                                  const newIngredients = [...createRecipeIngredients]
+                                  newIngredients[index].ingredientId = Number(e.target.value)
+                                  setCreateRecipeIngredients(newIngredients)
+                                }}
+                                style={{ width: '100%' }}
+                              >
+                                <option value="0">-- Chọn nguyên liệu --</option>
+                                {availableIngredients.map((ing) => (
+                                  <option key={ing.id} value={ing.id}>
+                                    {ing.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="Số lượng"
+                                value={ri.quantity}
+                                onChange={(e) => {
+                                  const newIngredients = [...createRecipeIngredients]
+                                  newIngredients[index].quantity = e.target.value
+                                  setCreateRecipeIngredients(newIngredients)
+                                }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              className="btn small danger"
+                              onClick={() =>
+                                removeRecipeIngredient(
+                                  index,
+                                  createRecipeIngredients,
+                                  setCreateRecipeIngredients,
+                                )
+                              }
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="btn outline"
+                          onClick={() =>
+                            addRecipeIngredient(
+                              createRecipeIngredients,
+                              setCreateRecipeIngredients,
+                            )
+                          }
+                        >
+                          + Thêm nguyên liệu
+                        </button>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Ảnh (tuỳ chọn)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null
+                            setCreateRecipeImageFile(file)
+                          }}
+                        />
+                      </div>
+
+                      {createRecipeError && (
+                        <p className="error-text">{createRecipeError}</p>
+                      )}
+
+                      <div className="edit-actions">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={() => {
+                            setCreatingRecipe(false)
+                            setCreateRecipeError(null)
+                          }}
+                          disabled={createRecipeLoading}
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn primary"
+                          disabled={createRecipeLoading}
+                        >
+                          {createRecipeLoading ? 'Đang tạo...' : 'Tạo món ăn'}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                )}
+
+                {foodSubTab === 'recipes' && editingRecipe && (
+                  <section className="card edit-card">
+                    <div className="card-header">
+                      <h2>Chỉnh sửa món ăn #{editingRecipe.id}</h2>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          setEditingRecipe(null)
+                          setEditRecipeError(null)
+                        }}
+                      >
+                        Quay lại
+                      </button>
+                    </div>
+                    <form className="form" onSubmit={handleUpdateRecipe}>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>
+                            Tên món ăn <span style={{ color: 'red' }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={editRecipeName}
+                            onChange={(e) => setEditRecipeName(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Loại món ăn</label>
+                          <select
+                            value={editRecipeType}
+                            onChange={(e) => setEditRecipeType(e.target.value)}
+                          >
+                            <option value="">-- Chọn --</option>
+                            <option value="MAIN_DISH">Món chính</option>
+                            <option value="SIDE_DISH">Món phụ</option>
+                            <option value="APPETIZER">Khai vị</option>
+                            <option value="DESSERT">Tráng miệng</option>
+                            <option value="DRINK">Đồ uống</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Mô tả</label>
+                        <textarea
+                          rows={3}
+                          value={editRecipeDescription}
+                          onChange={(e) => setEditRecipeDescription(e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>Calories ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editRecipeCalories}
+                            onChange={(e) => setEditRecipeCalories(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Protein (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editRecipeProtein}
+                            onChange={(e) => setEditRecipeProtein(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Carbs (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editRecipeCarbs}
+                            onChange={(e) => setEditRecipeCarbs(e.target.value)}
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Fat (g) ({'>='}0)</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={editRecipeFat}
+                            onChange={(e) => setEditRecipeFat(e.target.value)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Nguyên liệu</label>
+                        {editRecipeIngredients.map((ri, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              display: 'flex',
+                              gap: '0.5rem',
+                              marginBottom: '0.5rem',
+                              alignItems: 'flex-end',
+                            }}
+                          >
+                            <div style={{ flex: 1 }}>
+                              <select
+                                value={ri.ingredientId}
+                                onChange={(e) => {
+                                  const newIngredients = [...editRecipeIngredients]
+                                  newIngredients[index].ingredientId = Number(e.target.value)
+                                  setEditRecipeIngredients(newIngredients)
+                                }}
+                                style={{ width: '100%' }}
+                              >
+                                <option value="0">-- Chọn nguyên liệu --</option>
+                                {availableIngredients.map((ing) => (
+                                  <option key={ing.id} value={ing.id}>
+                                    {ing.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="Số lượng"
+                                value={ri.quantity}
+                                onChange={(e) => {
+                                  const newIngredients = [...editRecipeIngredients]
+                                  newIngredients[index].quantity = e.target.value
+                                  setEditRecipeIngredients(newIngredients)
+                                }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              className="btn small danger"
+                              onClick={() =>
+                                removeRecipeIngredient(
+                                  index,
+                                  editRecipeIngredients,
+                                  setEditRecipeIngredients,
+                                )
+                              }
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="btn outline"
+                          onClick={() =>
+                            addRecipeIngredient(
+                              editRecipeIngredients,
+                              setEditRecipeIngredients,
+                            )
+                          }
+                        >
+                          + Thêm nguyên liệu
+                        </button>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Ảnh mới (tuỳ chọn)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0] ?? null
+                            setEditRecipeImageFile(file)
+                          }}
+                        />
+                        {editingRecipe.imageUrl && !editRecipeImageFile && (
+                          <p className="helper-text">
+                            Ảnh hiện tại:
+                            <br />
+                            <img
+                              src={editingRecipe.imageUrl}
+                              alt={editingRecipe.name}
+                              className="exercise-image"
+                            />
+                          </p>
+                        )}
+                      </div>
+
+                      {editRecipeError && (
+                        <p className="error-text">{editRecipeError}</p>
+                      )}
+
+                      <div className="edit-actions">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={closeEditRecipe}
+                          disabled={editRecipeLoading}
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn primary"
+                          disabled={editRecipeLoading}
+                        >
+                          {editRecipeLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
                         </button>
                       </div>
                     </form>

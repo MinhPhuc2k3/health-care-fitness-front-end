@@ -171,6 +171,12 @@ body {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
+.search-input {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .search-input input {
   padding: 0.4rem 0.75rem;
   border-radius: 999px;
@@ -178,6 +184,15 @@ body {
   background: #ffffff;
   color: #111827;
   min-width: 220px;
+  flex: 1;
+}
+
+.search-input button {
+  padding: 0.4rem 0.6rem;
+  min-width: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .search-input input:focus {
