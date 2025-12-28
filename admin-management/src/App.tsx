@@ -144,7 +144,44 @@ type RecipePage = {
   }
 }
 
+type PlanSession = {
+  id: number
+  sessionDayOfWeek: string
+  targetCalories: number
+  category: string
+  muscleGroups?: MuscleGroup[]
+}
+
+type Plan = {
+  id: number
+  name: string
+  goal?: {
+    id: number
+    name?: string
+  }
+  planSessions?: PlanSession[]
+}
+
 const API_BASE = 'http://localhost:8000'
+
+// Translation functions
+const translateCategory = (category: string): string => {
+  const translations: Record<string, string> = {
+    STRENGTH: 'Kháng lực',
+    CARDIO: 'Cardio',
+    FLEXIBILITY: 'Linh hoạt',
+  }
+  return translations[category] || category
+}
+
+const translateActivityLevel = (level: string): string => {
+  const translations: Record<string, string> = {
+    beginner: 'Cơ bản',
+    intermediate: 'Trung bình',
+    advanced: 'Nâng cao',
+  }
+  return translations[level] || level
+}
 
 function App() {
   const [username, setUsername] = useState('qa12')
@@ -159,9 +196,9 @@ function App() {
   const [page, setPage] = useState(0)
   const [pageSize, setPageSize] = useState(10)
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'exercises' | 'foods'>(
-    'exercises',
-  )
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'exercises' | 'foods' | 'plans'
+  >('exercises')
   const [exerciseSubTab, setExerciseSubTab] = useState<'list' | 'import'>('list')
   const [foodSubTab, setFoodSubTab] = useState<'ingredients' | 'recipes'>('ingredients')
 
@@ -285,6 +322,39 @@ function App() {
 
   const [deleteRecipeLoadingId, setDeleteRecipeLoadingId] = useState<number | null>(null)
   const [availableIngredients, setAvailableIngredients] = useState<Ingredient[]>([])
+
+  // Plan states
+  const [plans, setPlans] = useState<Plan[]>([])
+  const [planError, setPlanError] = useState<string | null>(null)
+  const [loadingPlans, setLoadingPlans] = useState(false)
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
+  const [planSessions, setPlanSessions] = useState<PlanSession[]>([])
+  const [loadingPlanSessions, setLoadingPlanSessions] = useState(false)
+
+  const [editingPlan, setEditingPlan] = useState<Plan | null>(null)
+  const [editPlanName, setEditPlanName] = useState('')
+  const [editPlanGoalId, setEditPlanGoalId] = useState<number | null>(null)
+  const [editPlanSessions, setEditPlanSessions] = useState<
+    {
+      id?: number
+      sessionDayOfWeek: string
+      targetCalories: string
+      category: string
+      muscleGroupIds: number[]
+    }[]
+  >([])
+  const [editPlanLoading, setEditPlanLoading] = useState(false)
+  const [editPlanError, setEditPlanError] = useState<string | null>(null)
+
+  const [creatingPlan, setCreatingPlan] = useState(false)
+  const [createPlanName, setCreatePlanName] = useState('')
+  const [createPlanGoalId, setCreatePlanGoalId] = useState<number | null>(null)
+  const [createPlanLoading, setCreatePlanLoading] = useState(false)
+  const [createPlanError, setCreatePlanError] = useState<string | null>(null)
+
+  const [deletePlanLoadingId, setDeletePlanLoadingId] = useState<number | null>(null)
+  const [availableGoals, setAvailableGoals] = useState<{ id: number; name: string }[]>([])
+  const [selectedGoalId, setSelectedGoalId] = useState<number | null>(null)
 
   const [userMonthlyStats, setUserMonthlyStats] = useState<UserMonthlyStats[]>([])
   const [exerciseRanking, setExerciseRanking] = useState<ExerciseMonthlyRanking[]>([])
@@ -550,6 +620,37 @@ function App() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoggedIn, activeTab, selectedYear, selectedMonth])
+
+  useEffect(() => {
+    if (isLoggedIn && activeTab === 'plans') {
+      fetchAvailableGoals()
+      // Load muscle groups for plan sessions
+      ;(async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/muscle_group`, {
+            headers: isLoggedIn
+              ? {
+                  Authorization: `Bearer ${user?.token}`,
+                }
+              : undefined,
+          })
+          if (!res.ok) return
+          const data: MuscleGroup[] = await res.json()
+          setMuscleGroupOptions(data)
+        } catch (err) {
+          console.error(err)
+        }
+      })()
+      if (selectedGoalId !== null) {
+        fetchPlans(selectedGoalId)
+      }
+    } else {
+      setPlans([])
+      setSelectedPlan(null)
+      setPlanSessions([])
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn, activeTab, selectedGoalId])
 
   const fetchIngredients = async (pageNumber: number) => {
     setLoadingIngredients(true)
@@ -1216,6 +1317,292 @@ function App() {
     setIngredients(ingredients.filter((_, i) => i !== index))
   }
 
+  const fetchPlans = async (goalId?: number | null) => {
+    const targetGoalId = goalId !== undefined ? goalId : selectedGoalId
+    if (!targetGoalId) {
+      setPlans([])
+      return
+    }
+
+    setLoadingPlans(true)
+    setPlanError(null)
+
+    try {
+      const params = new URLSearchParams({
+        goalId: String(targetGoalId),
+      })
+
+      const res = await fetch(`${API_BASE}/api/plans?${params.toString()}`, {
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Lấy danh sách kế hoạch lỗi ${res.status}`)
+      }
+
+      const data: Plan[] = await res.json()
+      setPlans(data)
+    } catch (err: any) {
+      console.error(err)
+      setPlanError(err.message ?? 'Không lấy được danh sách kế hoạch')
+    } finally {
+      setLoadingPlans(false)
+    }
+  }
+
+  const fetchPlanSessions = async (planId: number) => {
+    setLoadingPlanSessions(true)
+    try {
+      const res = await fetch(`${API_BASE}/api/plans/${planId}/sessions`, {
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Lấy sessions lỗi ${res.status}`)
+      }
+
+      const data: PlanSession[] = await res.json()
+      setPlanSessions(data)
+    } catch (err: any) {
+      console.error(err)
+      alert(err.message ?? 'Không lấy được sessions')
+    } finally {
+      setLoadingPlanSessions(false)
+    }
+  }
+
+  const fetchAvailableGoals = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/goals`, {
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+      if (!res.ok) return
+      const data: { id: number; name: string }[] = await res.json()
+      setAvailableGoals(data)
+    } catch (err) {
+      console.error(err)
+    }
+  }
+
+  const handleCreatePlan = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!createPlanName.trim()) {
+      setCreatePlanError('Tên kế hoạch là bắt buộc')
+      return
+    }
+
+    try {
+      setCreatePlanLoading(true)
+      setCreatePlanError(null)
+
+      const body: any = {
+        name: createPlanName.trim(),
+      }
+
+      if (createPlanGoalId) {
+        body.goal = { id: createPlanGoalId }
+      }
+
+      const res = await fetch(`${API_BASE}/api/plans`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user?.token}`,
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Tạo kế hoạch thất bại (${res.status})`)
+      }
+
+      const created: Plan = await res.json()
+      setPlans((prev) => [created, ...prev])
+
+      // Reset form
+      setCreatePlanName('')
+      setCreatePlanGoalId(null)
+      setCreatingPlan(false)
+    } catch (err: any) {
+      console.error(err)
+      setCreatePlanError(err.message ?? 'Tạo kế hoạch thất bại')
+    } finally {
+      setCreatePlanLoading(false)
+    }
+  }
+
+  const openEditPlan = async (plan: Plan) => {
+    setEditingPlan(plan)
+    setEditPlanName(plan.name)
+    setEditPlanGoalId(plan.goal?.id || null)
+    setEditPlanError(null)
+
+    // Fetch sessions for this plan
+    try {
+      const res = await fetch(`${API_BASE}/api/plans/${plan.id}/sessions`, {
+        headers: isLoggedIn
+          ? {
+              Authorization: `Bearer ${user?.token}`,
+            }
+          : undefined,
+      })
+
+      if (res.ok) {
+        const sessions: PlanSession[] = await res.json()
+        setEditPlanSessions(
+          sessions.map((s) => ({
+            id: s.id,
+            sessionDayOfWeek: s.sessionDayOfWeek,
+            targetCalories: String(s.targetCalories),
+            category: s.category,
+            muscleGroupIds: s.muscleGroups?.map((mg) => mg.id) || [],
+          })),
+        )
+      } else {
+        setEditPlanSessions([])
+      }
+    } catch (err) {
+      console.error(err)
+      setEditPlanSessions([])
+    }
+  }
+
+  const closeEditPlan = () => {
+    setEditingPlan(null)
+    setEditPlanError(null)
+    setEditPlanSessions([])
+  }
+
+  const handleUpdatePlan = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!editingPlan) return
+
+    try {
+      setEditPlanLoading(true)
+      setEditPlanError(null)
+
+      const body: any = {
+        name: editPlanName.trim(),
+      }
+
+      if (editPlanGoalId) {
+        body.goal = { id: editPlanGoalId }
+      }
+
+      // Add plan sessions
+      body.planSessions = editPlanSessions.map((s) => {
+        const session: any = {
+          sessionDayOfWeek: s.sessionDayOfWeek,
+          targetCalories: Number(s.targetCalories),
+          category: s.category,
+        }
+        if (s.id) {
+          session.id = s.id
+        }
+        if (s.muscleGroupIds.length > 0) {
+          session.muscleGroups = s.muscleGroupIds.map((id) => ({ id }))
+        }
+        return session
+      })
+
+      const res = await fetch(`${API_BASE}/api/plans/${editingPlan.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${user?.token}`,
+        },
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Cập nhật kế hoạch thất bại (${res.status})`)
+      }
+
+      const updated: Plan = await res.json()
+      setPlans((prev) => prev.map((p) => (p.id === updated.id ? updated : p)))
+
+      closeEditPlan()
+    } catch (err: any) {
+      console.error(err)
+      setEditPlanError(err.message ?? 'Cập nhật kế hoạch thất bại')
+    } finally {
+      setEditPlanLoading(false)
+    }
+  }
+
+  const addPlanSession = () => {
+    setEditPlanSessions([
+      ...editPlanSessions,
+      {
+        sessionDayOfWeek: 'MONDAY',
+        targetCalories: '',
+        category: 'STRENGTH',
+        muscleGroupIds: [],
+      },
+    ])
+  }
+
+  const removePlanSession = (index: number) => {
+    setEditPlanSessions(editPlanSessions.filter((_, i) => i !== index))
+  }
+
+  const handleDeletePlan = async (id: number) => {
+    if (
+      !window.confirm(
+        'Bạn có chắc chắn muốn xóa kế hoạch này? Hành động này không thể hoàn tác.',
+      )
+    ) {
+      return
+    }
+
+    try {
+      setDeletePlanLoadingId(id)
+      const res = await fetch(`${API_BASE}/api/plans/${id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${user?.token}`,
+        },
+      })
+
+      if (!res.ok) {
+        const text = await res.text()
+        throw new Error(text || `Xóa kế hoạch thất bại (${res.status})`)
+      }
+
+      setPlans((prev) => prev.filter((p) => p.id !== id))
+      if (selectedPlan?.id === id) {
+        setSelectedPlan(null)
+        setPlanSessions([])
+      }
+    } catch (err: any) {
+      console.error(err)
+      alert(err.message ?? 'Xóa kế hoạch thất bại')
+    } finally {
+      setDeletePlanLoadingId(null)
+    }
+  }
+
+  const handleViewPlanSessions = async (plan: Plan) => {
+    setSelectedPlan(plan)
+    await fetchPlanSessions(plan.id)
+  }
+
   const handleLogout = () => {
     setUser(null)
     setExercisesPage(null)
@@ -1248,6 +1635,11 @@ function App() {
     setEditingRecipe(null)
     setCreatingRecipe(false)
     setAvailableIngredients([])
+    setPlans([])
+    setSelectedPlan(null)
+    setPlanSessions([])
+    setEditingPlan(null)
+    setCreatingPlan(false)
   }
 
   const openEditExercise = (exercise: Exercise) => {
@@ -1652,6 +2044,13 @@ function App() {
               >
                 Quản lí món ăn
               </button>
+              <button
+                type="button"
+                className={`tab ${activeTab === 'plans' ? 'active' : ''}`}
+                onClick={() => setActiveTab('plans')}
+              >
+                Quản lý kế hoạch
+              </button>
             </div>
 
             {activeTab === 'overview' && (
@@ -1934,7 +2333,7 @@ function App() {
 
                     <div className="filters">
                       <div className="filter-group">
-                        <h3>Category</h3>
+                        <h3>Loại hình</h3>
                         <div className="checkbox-group">
                           {['STRENGTH', 'CARDIO', 'FLEXIBILITY'].map((cat) => (
                             <label key={cat} className="checkbox-item">
@@ -1948,14 +2347,14 @@ function App() {
                                   )
                                 }}
                               />
-                              <span>{cat}</span>
+                              <span>{translateCategory(cat)}</span>
                             </label>
                           ))}
                         </div>
                       </div>
 
                       <div className="filter-group">
-                        <h3>Muscle group</h3>
+                        <h3>Nhóm cơ</h3>
                         <div className="checkbox-group checkbox-group-scroll">
                           {muscleGroupOptions.map((mg) => (
                             <label key={mg.id} className="checkbox-item">
@@ -1980,7 +2379,7 @@ function App() {
                       </div>
 
                       <div className="filter-group">
-                        <h3>Activity level</h3>
+                        <h3>Độ khó</h3>
                         <div className="checkbox-group">
                           {['beginner', 'intermediate', 'advanced'].map((lv) => (
                             <label key={lv} className="checkbox-item">
@@ -1994,7 +2393,7 @@ function App() {
                                   )
                                 }}
                               />
-                              <span>{lv}</span>
+                              <span>{translateActivityLevel(lv)}</span>
                             </label>
                           ))}
                         </div>
@@ -2015,8 +2414,8 @@ function App() {
                               <tr>
                                 <th>ID</th>
                                 <th>Tên</th>
-                                <th>Category</th>
-                                <th>Muscle groups</th>
+                                <th>Loại hình</th>
+                                <th>Nhóm cơ</th>
                                 <th>Độ khó</th>
                                 <th>Ảnh</th>
                                 <th>Hành động</th>
@@ -2027,9 +2426,9 @@ function App() {
                                 <tr key={ex.id}>
                                   <td>{ex.id}</td>
                                   <td>{ex.name}</td>
-                                  <td>{ex.category}</td>
+                                  <td>{translateCategory(ex.category)}</td>
                                   <td>{ex.muscleGroups.map((m) => m.name).join(', ')}</td>
-                                  <td>{ex.difficulty}</td>
+                                  <td>{translateActivityLevel(ex.difficulty)}</td>
                                   <td>
                                     {ex.imageUrl && (
                                       <img
@@ -2045,16 +2444,64 @@ function App() {
                                         type="button"
                                         className="btn small"
                                         onClick={() => openEditExercise(ex)}
+                                        title="Sửa"
                                       >
-                                        Sửa
+                                        <svg
+                                          width="16"
+                                          height="16"
+                                          viewBox="0 0 16 16"
+                                          fill="none"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                        >
+                                          <path
+                                            d="M11.333 2a2.667 2.667 0 0 1 3.774 3.774l-8 8A2.667 2.667 0 0 1 4.667 14H2v-2.667a2.667 2.667 0 0 1 .78-1.887l8-8Z"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                          <path
+                                            d="M9.333 4 12 6.667"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        </svg>
                                       </button>
                                       <button
                                         type="button"
                                         className="btn small danger"
                                         onClick={() => handleDeleteExercise(ex.id)}
                                         disabled={deleteLoadingId === ex.id}
+                                        title="Xóa"
                                       >
-                                        {deleteLoadingId === ex.id ? 'Đang xóa...' : 'Xóa'}
+                                        {deleteLoadingId === ex.id ? (
+                                          'Đang xóa...'
+                                        ) : (
+                                          <svg
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 16 16"
+                                            fill="none"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                          >
+                                            <path
+                                              d="M2 4h12M12.667 4v9.333a1.333 1.333 0 0 1-1.334 1.334H4.667a1.333 1.333 0 0 1-1.334-1.334V4m2 0V2.667a1.333 1.333 0 0 1 1.334-1.334h2.666a1.333 1.333 0 0 1 1.334 1.334V4"
+                                              stroke="currentColor"
+                                              strokeWidth="1.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
+                                            <path
+                                              d="M6.667 7.333v4M9.333 7.333v4"
+                                              stroke="currentColor"
+                                              strokeWidth="1.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
+                                          </svg>
+                                        )}
                                       </button>
                                     </div>
                                   </td>
@@ -2312,15 +2759,15 @@ function App() {
                           />
                         </div>
                         <div className="form-group">
-                          <label>Category</label>
+                          <label>Loại hình</label>
                           <select
                             value={editCategory}
                             onChange={(e) => setEditCategory(e.target.value)}
                           >
                             <option value="">-- Chọn --</option>
-                            <option value="STRENGTH">STRENGTH</option>
-                            <option value="CARDIO">CARDIO</option>
-                            <option value="FLEXIBILITY">FLEXIBILITY</option>
+                            <option value="STRENGTH">Kháng lực</option>
+                            <option value="CARDIO">Cardio</option>
+                            <option value="FLEXIBILITY">Linh hoạt</option>
                           </select>
                         </div>
                       </div>
@@ -2342,9 +2789,9 @@ function App() {
                             onChange={(e) => setEditDifficulty(e.target.value)}
                           >
                             <option value="">-- Chọn --</option>
-                            <option value="beginner">beginner</option>
-                            <option value="intermediate">intermediate</option>
-                            <option value="advanced">advanced</option>
+                            <option value="beginner">Cơ bản</option>
+                            <option value="intermediate">Trung bình</option>
+                            <option value="advanced">Nâng cao</option>
                           </select>
                         </div>
                         <div className="form-group">
@@ -2373,7 +2820,7 @@ function App() {
                       </div>
 
                       <div className="form-group">
-                        <label>Muscle groups</label>
+                        <label>Nhóm cơ</label>
                         <div className="checkbox-group checkbox-group-scroll">
                           {muscleGroupOptions.map((mg) => (
                             <label key={mg.id} className="checkbox-item">
@@ -2566,18 +3013,64 @@ function App() {
                                         type="button"
                                         className="btn small"
                                         onClick={() => openEditIngredient(ing)}
+                                        title="Sửa"
                                       >
-                                        Sửa
+                                        <svg
+                                          width="16"
+                                          height="16"
+                                          viewBox="0 0 16 16"
+                                          fill="none"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                        >
+                                          <path
+                                            d="M11.333 2a2.667 2.667 0 0 1 3.774 3.774l-8 8A2.667 2.667 0 0 1 4.667 14H2v-2.667a2.667 2.667 0 0 1 .78-1.887l8-8Z"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                          <path
+                                            d="M9.333 4 12 6.667"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        </svg>
                                       </button>
                                       <button
                                         type="button"
                                         className="btn small danger"
                                         onClick={() => handleDeleteIngredient(ing.id)}
                                         disabled={deleteIngredientLoadingId === ing.id}
+                                        title="Xóa"
                                       >
-                                        {deleteIngredientLoadingId === ing.id
-                                          ? 'Đang xóa...'
-                                          : 'Xóa'}
+                                        {deleteIngredientLoadingId === ing.id ? (
+                                          'Đang xóa...'
+                                        ) : (
+                                          <svg
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 16 16"
+                                            fill="none"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                          >
+                                            <path
+                                              d="M2 4h12M12.667 4v9.333a1.333 1.333 0 0 1-1.334 1.334H4.667a1.333 1.333 0 0 1-1.334-1.334V4m2 0V2.667a1.333 1.333 0 0 1 1.334-1.334h2.666a1.333 1.333 0 0 1 1.334 1.334V4"
+                                              stroke="currentColor"
+                                              strokeWidth="1.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
+                                            <path
+                                              d="M6.667 7.333v4M9.333 7.333v4"
+                                              stroke="currentColor"
+                                              strokeWidth="1.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
+                                          </svg>
+                                        )}
                                       </button>
                                     </div>
                                   </td>
@@ -3107,18 +3600,64 @@ function App() {
                                         type="button"
                                         className="btn small"
                                         onClick={() => openEditRecipe(recipe)}
+                                        title="Sửa"
                                       >
-                                        Sửa
+                                        <svg
+                                          width="16"
+                                          height="16"
+                                          viewBox="0 0 16 16"
+                                          fill="none"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                        >
+                                          <path
+                                            d="M11.333 2a2.667 2.667 0 0 1 3.774 3.774l-8 8A2.667 2.667 0 0 1 4.667 14H2v-2.667a2.667 2.667 0 0 1 .78-1.887l8-8Z"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                          <path
+                                            d="M9.333 4 12 6.667"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        </svg>
                                       </button>
                                       <button
                                         type="button"
                                         className="btn small danger"
                                         onClick={() => handleDeleteRecipe(recipe.id)}
                                         disabled={deleteRecipeLoadingId === recipe.id}
+                                        title="Xóa"
                                       >
-                                        {deleteRecipeLoadingId === recipe.id
-                                          ? 'Đang xóa...'
-                                          : 'Xóa'}
+                                        {deleteRecipeLoadingId === recipe.id ? (
+                                          'Đang xóa...'
+                                        ) : (
+                                          <svg
+                                            width="16"
+                                            height="16"
+                                            viewBox="0 0 16 16"
+                                            fill="none"
+                                            xmlns="http://www.w3.org/2000/svg"
+                                          >
+                                            <path
+                                              d="M2 4h12M12.667 4v9.333a1.333 1.333 0 0 1-1.334 1.334H4.667a1.333 1.333 0 0 1-1.334-1.334V4m2 0V2.667a1.333 1.333 0 0 1 1.334-1.334h2.666a1.333 1.333 0 0 1 1.334 1.334V4"
+                                              stroke="currentColor"
+                                              strokeWidth="1.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
+                                            <path
+                                              d="M6.667 7.333v4M9.333 7.333v4"
+                                              stroke="currentColor"
+                                              strokeWidth="1.5"
+                                              strokeLinecap="round"
+                                              strokeLinejoin="round"
+                                            />
+                                          </svg>
+                                        )}
                                       </button>
                                     </div>
                                   </td>
@@ -3595,6 +4134,516 @@ function App() {
                           disabled={editRecipeLoading}
                         >
                           {editRecipeLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                )}
+              </>
+            )}
+
+            {activeTab === 'plans' && (
+              <>
+                {!editingPlan && !creatingPlan && (
+                  <section className="card">
+                    <div className="card-header">
+                      <h2>Danh sách kế hoạch</h2>
+                      <div className="card-header-actions">
+                        <select
+                          value={selectedGoalId || ''}
+                          onChange={(e) => {
+                            const goalId = e.target.value
+                              ? Number(e.target.value)
+                              : null
+                            setSelectedGoalId(goalId)
+                            if (goalId !== null) {
+                              fetchPlans(goalId)
+                            }
+                          }}
+                          style={{ marginRight: '0.5rem' }}
+                        >
+                          <option value="">-- Chọn mục tiêu --</option>
+                          {availableGoals.map((goal) => (
+                            <option key={goal.id} value={goal.id}>
+                              {goal.name}
+                            </option>
+                          ))}
+                        </select>
+                        <button
+                          className="btn primary"
+                          type="button"
+                          onClick={() => setCreatingPlan(true)}
+                        >
+                          + Tạo mới
+                        </button>
+                        <button
+                          className="btn outline"
+                          type="button"
+                          onClick={() => fetchPlans(selectedGoalId)}
+                          disabled={loadingPlans || !selectedGoalId}
+                        >
+                          {loadingPlans ? 'Đang tải...' : 'Tải lại'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {planError && <p className="error-text">{planError}</p>}
+
+                    {!selectedGoalId && !loadingPlans && (
+                      <p>Vui lòng chọn mục tiêu để xem danh sách kế hoạch.</p>
+                    )}
+
+                    {selectedGoalId && !plans.length && !loadingPlans && (
+                      <p>
+                        Chưa có kế hoạch nào cho mục tiêu này. Nhấn &quot;Tạo mới&quot; để
+                        tạo kế hoạch.
+                      </p>
+                    )}
+
+                    {plans.length > 0 && (
+                      <div className="table-wrapper">
+                        <table className="table">
+                          <thead>
+                            <tr>
+                              <th>ID</th>
+                              <th>Tên kế hoạch</th>
+                              <th>Mục tiêu</th>
+                              <th>Số sessions</th>
+                              <th>Hành động</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {plans.map((plan) => (
+                              <tr key={plan.id}>
+                                <td>{plan.id}</td>
+                                <td>{plan.name}</td>
+                                <td>{plan.goal?.name || '-'}</td>
+                                <td>{plan.planSessions?.length || 0}</td>
+                                <td>
+                                  <div className="table-actions">
+                                    <button
+                                      type="button"
+                                      className="btn small"
+                                      onClick={() => handleViewPlanSessions(plan)}
+                                      title="Xem sessions"
+                                    >
+                                      <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 16 16"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                      >
+                                        <path
+                                          d="M8 3C4.667 3 2.073 5.28 1 8.5c1.073 3.22 3.667 5.5 7 5.5s5.927-2.28 7-5.5C13.927 5.28 11.333 3 8 3Z"
+                                          stroke="currentColor"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                        <path
+                                          d="M8 10.667a2.667 2.667 0 1 0 0-5.334 2.667 2.667 0 0 0 0 5.334Z"
+                                          stroke="currentColor"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn small"
+                                      onClick={() => openEditPlan(plan)}
+                                      title="Sửa"
+                                    >
+                                      <svg
+                                        width="16"
+                                        height="16"
+                                        viewBox="0 0 16 16"
+                                        fill="none"
+                                        xmlns="http://www.w3.org/2000/svg"
+                                      >
+                                        <path
+                                          d="M11.333 2a2.667 2.667 0 0 1 3.774 3.774l-8 8A2.667 2.667 0 0 1 4.667 14H2v-2.667a2.667 2.667 0 0 1 .78-1.887l8-8Z"
+                                          stroke="currentColor"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                        <path
+                                          d="M9.333 4 12 6.667"
+                                          stroke="currentColor"
+                                          strokeWidth="1.5"
+                                          strokeLinecap="round"
+                                          strokeLinejoin="round"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn small danger"
+                                      onClick={() => handleDeletePlan(plan.id)}
+                                      disabled={deletePlanLoadingId === plan.id}
+                                      title="Xóa"
+                                    >
+                                      {deletePlanLoadingId === plan.id ? (
+                                        'Đang xóa...'
+                                      ) : (
+                                        <svg
+                                          width="16"
+                                          height="16"
+                                          viewBox="0 0 16 16"
+                                          fill="none"
+                                          xmlns="http://www.w3.org/2000/svg"
+                                        >
+                                          <path
+                                            d="M2 4h12M12.667 4v9.333a1.333 1.333 0 0 1-1.334 1.334H4.667a1.333 1.333 0 0 1-1.334-1.334V4m2 0V2.667a1.333 1.333 0 0 1 1.334-1.334h2.666a1.333 1.333 0 0 1 1.334 1.334V4"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                          <path
+                                            d="M6.667 7.333v4M9.333 7.333v4"
+                                            stroke="currentColor"
+                                            strokeWidth="1.5"
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                          />
+                                        </svg>
+                                      )}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {selectedPlan && (
+                      <section className="card" style={{ marginTop: '1rem' }}>
+                        <div className="card-header">
+                          <h3>Sessions của kế hoạch: {selectedPlan.name}</h3>
+                          <button
+                            type="button"
+                            className="btn secondary"
+                            onClick={() => {
+                              setSelectedPlan(null)
+                              setPlanSessions([])
+                            }}
+                          >
+                            Đóng
+                          </button>
+                        </div>
+                        {loadingPlanSessions ? (
+                          <p>Đang tải sessions...</p>
+                        ) : planSessions.length > 0 ? (
+                          <div className="table-wrapper">
+                            <table className="table">
+                              <thead>
+                                <tr>
+                                  <th>ID</th>
+                                  <th>Ngày trong tuần</th>
+                                  <th>Calories mục tiêu</th>
+                                  <th>Loại hình</th>
+                                  <th>Nhóm cơ</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {planSessions.map((session) => (
+                                  <tr key={session.id}>
+                                    <td>{session.id}</td>
+                                    <td>{session.sessionDayOfWeek}</td>
+                                    <td>{session.targetCalories}</td>
+                                    <td>{translateCategory(session.category)}</td>
+                                    <td>
+                                      {session.muscleGroups
+                                        ?.map((mg) => mg.name)
+                                        .join(', ') || '-'}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p>Chưa có sessions nào.</p>
+                        )}
+                      </section>
+                    )}
+                  </section>
+                )}
+
+                {creatingPlan && (
+                  <section className="card edit-card">
+                    <div className="card-header">
+                      <h2>Tạo kế hoạch mới</h2>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          setCreatingPlan(false)
+                          setCreatePlanError(null)
+                        }}
+                      >
+                        Quay lại
+                      </button>
+                    </div>
+                    <form className="form" onSubmit={handleCreatePlan}>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>
+                            Tên kế hoạch <span style={{ color: 'red' }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={createPlanName}
+                            onChange={(e) => setCreatePlanName(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Mục tiêu</label>
+                          <select
+                            value={createPlanGoalId || ''}
+                            onChange={(e) =>
+                              setCreatePlanGoalId(
+                                e.target.value ? Number(e.target.value) : null,
+                              )
+                            }
+                          >
+                            <option value="">-- Chọn mục tiêu --</option>
+                            {availableGoals.map((goal) => (
+                              <option key={goal.id} value={goal.id}>
+                                {goal.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {createPlanError && (
+                        <p className="error-text">{createPlanError}</p>
+                      )}
+
+                      <div className="edit-actions">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={() => {
+                            setCreatingPlan(false)
+                            setCreatePlanError(null)
+                          }}
+                          disabled={createPlanLoading}
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn primary"
+                          disabled={createPlanLoading}
+                        >
+                          {createPlanLoading ? 'Đang tạo...' : 'Tạo kế hoạch'}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                )}
+
+                {editingPlan && (
+                  <section className="card edit-card">
+                    <div className="card-header">
+                      <h2>Chỉnh sửa kế hoạch #{editingPlan.id}</h2>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        onClick={() => {
+                          setEditingPlan(null)
+                          setEditPlanError(null)
+                        }}
+                      >
+                        Quay lại
+                      </button>
+                    </div>
+                    <form className="form" onSubmit={handleUpdatePlan}>
+                      <div className="form-row">
+                        <div className="form-group">
+                          <label>
+                            Tên kế hoạch <span style={{ color: 'red' }}>*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={editPlanName}
+                            onChange={(e) => setEditPlanName(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <div className="form-group">
+                          <label>Mục tiêu</label>
+                          <select
+                            value={editPlanGoalId || ''}
+                            onChange={(e) =>
+                              setEditPlanGoalId(
+                                e.target.value ? Number(e.target.value) : null,
+                              )
+                            }
+                          >
+                            <option value="">-- Chọn mục tiêu --</option>
+                            {availableGoals.map((goal) => (
+                              <option key={goal.id} value={goal.id}>
+                                {goal.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="form-group">
+                        <label>Sessions</label>
+                        {editPlanSessions.map((session, index) => (
+                          <div
+                            key={index}
+                            style={{
+                              border: '1px solid #e5e7eb',
+                              borderRadius: '0.5rem',
+                              padding: '1rem',
+                              marginBottom: '0.75rem',
+                              background: '#f9fafb',
+                            }}
+                          >
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginBottom: '0.5rem',
+                              }}
+                            >
+                              <strong>Session {index + 1}</strong>
+                              <button
+                                type="button"
+                                className="btn small danger"
+                                onClick={() => removePlanSession(index)}
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                            <div className="form-row">
+                              <div className="form-group">
+                                <label>Ngày trong tuần</label>
+                                <select
+                                  value={session.sessionDayOfWeek}
+                                  onChange={(e) => {
+                                    const newSessions = [...editPlanSessions]
+                                    newSessions[index].sessionDayOfWeek =
+                                      e.target.value
+                                    setEditPlanSessions(newSessions)
+                                  }}
+                                >
+                                  <option value="MONDAY">Thứ 2</option>
+                                  <option value="TUESDAY">Thứ 3</option>
+                                  <option value="WEDNESDAY">Thứ 4</option>
+                                  <option value="THURSDAY">Thứ 5</option>
+                                  <option value="FRIDAY">Thứ 6</option>
+                                  <option value="SATURDAY">Thứ 7</option>
+                                  <option value="SUNDAY">Chủ nhật</option>
+                                </select>
+                              </div>
+                              <div className="form-group">
+                                <label>Calories mục tiêu</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={session.targetCalories}
+                                  onChange={(e) => {
+                                    const newSessions = [...editPlanSessions]
+                                    newSessions[index].targetCalories =
+                                      e.target.value
+                                    setEditPlanSessions(newSessions)
+                                  }}
+                                />
+                              </div>
+                              <div className="form-group">
+                                <label>Loại hình</label>
+                                <select
+                                  value={session.category}
+                                  onChange={(e) => {
+                                    const newSessions = [...editPlanSessions]
+                                    newSessions[index].category = e.target.value
+                                    setEditPlanSessions(newSessions)
+                                  }}
+                                >
+                                  <option value="STRENGTH">Kháng lực</option>
+                                  <option value="CARDIO">Cardio</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div className="form-group">
+                              <label>Nhóm cơ</label>
+                              <div className="checkbox-group checkbox-group-scroll">
+                                {muscleGroupOptions.map((mg) => (
+                                  <label key={mg.id} className="checkbox-item">
+                                    <input
+                                      type="checkbox"
+                                      checked={session.muscleGroupIds.includes(
+                                        mg.id,
+                                      )}
+                                      onChange={(e) => {
+                                        const newSessions = [...editPlanSessions]
+                                        if (e.target.checked) {
+                                          newSessions[index].muscleGroupIds = [
+                                            ...newSessions[index].muscleGroupIds,
+                                            mg.id,
+                                          ]
+                                        } else {
+                                          newSessions[index].muscleGroupIds =
+                                            newSessions[
+                                              index
+                                            ].muscleGroupIds.filter(
+                                              (id) => id !== mg.id,
+                                            )
+                                        }
+                                        setEditPlanSessions(newSessions)
+                                      }}
+                                    />
+                                    <span>{mg.name}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          className="btn outline"
+                          onClick={addPlanSession}
+                        >
+                          + Thêm session
+                        </button>
+                      </div>
+
+                      {editPlanError && (
+                        <p className="error-text">{editPlanError}</p>
+                      )}
+
+                      <div className="edit-actions">
+                        <button
+                          type="button"
+                          className="btn secondary"
+                          onClick={closeEditPlan}
+                          disabled={editPlanLoading}
+                        >
+                          Hủy
+                        </button>
+                        <button
+                          type="submit"
+                          className="btn primary"
+                          disabled={editPlanLoading}
+                        >
+                          {editPlanLoading ? 'Đang lưu...' : 'Lưu thay đổi'}
                         </button>
                       </div>
                     </form>
